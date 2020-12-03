@@ -3,7 +3,7 @@
 Plugin Name:  WooCommerce EAN Payment gateway
 Plugin URI:   https://norsemedia.dk/plugins
 Description:  Take payment from people using EAN (European Article Number).
-Version:      1.0.0
+Version:      1.1.0
 Author:       Norse Media
 Author URI:   https://norsemedia.dk
 License:      GPL2
@@ -67,26 +67,28 @@ add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'wc_offline_gatew
  *
  * @class 		WC_Gateway_Offline
  * @extends		WC_Payment_Gateway
- * @version		1.0.0
+ * @version		1.1.0
  * @package		WooCommerce/Classes/Payment
- * @author 		SkyVerge
+ * @author 		Norse Media
  */
 add_action('plugins_loaded', 'wc_offline_gateway_init', 11);
 
 // display the extra data in the order admin panel
 function norse_display_ean_data_in_admin($order) {
+
     $meta = maybe_unserialize(get_post_meta($order->id, '_norse_ean_payment', true));
     if (!empty($meta)) {
 ?>
         <div class="clearfix"></div>
         <h3><?php _e('EAN Details'); ?></h3>
         <?php
-        echo '<p><strong>' . __('EAN') . ':</strong> ' . $meta['ean_num'] . '</p>';
-        echo '<p><strong>' . __('Reference name') . ':</strong> ' . $meta['ref_name'] . '</p>';
-        echo '<p><strong>' . __('Requisition number') . ':</strong> ' . $meta['req_num'] . '</p>';
+
+        echo '<p><strong>' . __('EAN', 'norse-ean') . ':</strong> ' . $meta['ean_num'] . '<br/>';
+        echo '<strong>' . __('Reference name', 'norse-ean') . ':</strong> ' . $meta['ref_name'] . '<br/>';
+        echo '<strong>' . __('Requisition number', 'norse-ean') . ':</strong> ' . $meta['req_num'] . '</p>';
     }
 }
-add_action('woocommerce_admin_order_data_after_order_details', 'norse_display_ean_data_in_admin');
+add_action('woocommerce_admin_order_data_after_billing_address', 'norse_display_ean_data_in_admin');
 
 function wc_offline_gateway_init() {
     class WC_Gateway_Offline extends WC_Payment_Gateway {
@@ -110,7 +112,7 @@ function wc_offline_gateway_init() {
 
             // Actions
             add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
-            add_action('woocommerce_thankyou_' . $this->id, array($this, 'thankyou_instructions'));
+            // add_action('woocommerce_thankyou_' . $this->id, array($this, 'thankyou_instructions'));
 
             // Customer Emails
             add_action('woocommerce_email_after_order_table', array($this, 'email_instructions'), 10, 3);
@@ -152,21 +154,22 @@ function wc_offline_gateway_init() {
 
         public function payment_fields() { ?>
             <p class="form-row form-row-wide">
-                <label for="gc-wc-ean-num"><?php esc_html_e('EAN number', 'norse-ean'); ?> </label>
-                <input type="text" id="gc-wc-ean-num" name="norse_ean_payment[ean_num]" class="input-text">
+                <label for="ean-num"><?php esc_html_e('EAN number', 'norse-ean'); ?> </label>
+                <input type="text" id="ean-num" name="ean_num" class="input-text">
             </p>
             <p class="form-row form-row-wide">
-                <label for="gc-wc-ref-name"><?php esc_html_e('Reference person', 'norse-ean'); ?> </label>
-                <input type="text" id="gc-wc-ref-name" name="norse_ean_payment[ref_name]" class="input-text">
+                <label for="ref-name"><?php esc_html_e('Reference person', 'norse-ean'); ?> </label>
+                <input type="text" id="ref-name" name="ref_name" class="input-text">
             </p>
             <p class="form-row form-row-wide">
-                <label for="gc-wc-req-num"><?php esc_html_e('Requisition number', 'norse-ean'); ?> </label>
-                <input type="text" id="gc-wc-req-num" name="norse_ean_payment[req_num]" class="input-text">
+                <label for="req-num"><?php esc_html_e('Requisition number', 'norse-ean'); ?> </label>
+                <input type="text" id="req-num" name="req_num" class="input-text">
             </p>
 <?php }
 
         public function validate_fields() {
             $valid = true;
+
 
             function getEan13CheckDigit($param) {
                 $sum = 0;
@@ -192,20 +195,22 @@ function wc_offline_gateway_init() {
                 return $valid;
             }
 
-            if (empty($_POST['norse_ean_payment'])) {
+
+
+            if (empty($_POST['ean_num'])) {
                 wc_add_notice(__('Please add EAN details.', 'norse-ean'), 'error');
                 $valid = false;
             } else {
                 $data = $_POST['norse_ean_payment'];
-                if (empty($data['ean_num'])) {
+                if (empty($_POST['ean_num'])) {
                     wc_add_notice(__('Please enter an EAN.', 'norse-ean'), 'error');
                     $valid = false;
                 } else {
-                    if (strlen($data['ean_num']) != 13) {
+                    if (strlen($_POST['ean_num']) != 13) {
                         wc_add_notice(__('EAN must be 13 characters.', 'norse-ean'), 'error');
                         $valid = false;
                     } else {
-                        if (!validateEan13($data['ean_num'])) {
+                        if (!validateEan13($_POST['ean_num'])) {
                             wc_add_notice(__('EAN is not valid.', 'norse-ean'), 'error');
                             $valid = false;
                         }
@@ -221,6 +226,7 @@ function wc_offline_gateway_init() {
                 //     $valid = false;
                 // }
             }
+
             return $valid;
         }
 
@@ -272,12 +278,12 @@ function wc_offline_gateway_init() {
          */
         public function process_payment($order_id) {
 
-            if (isset($_POST['norse_ean_payment']) && is_array($_POST['norse_ean_payment'])) {
+            if (isset($_POST) && is_array($_POST)) {
                 $meta = array();
                 $fields = array("ean_num", "ref_name", "req_num");
                 foreach ($fields as $field) {
-                    if (!empty($_POST['norse_ean_payment'][$field])) {
-                        $meta[$field] = sanitize_text_field($_POST['norse_ean_payment'][$field]);
+                    if (!empty($_POST[$field])) {
+                        $meta[$field] = sanitize_text_field($_POST[$field]);
                     }
                 }
                 update_post_meta($order_id, '_norse_ean_payment', $meta);
